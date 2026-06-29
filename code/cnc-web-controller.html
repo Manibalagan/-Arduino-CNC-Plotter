@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC G-code Controller</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .header p {
+      font-size: 1.1em;
+      opacity: 0.9;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      padding: 30px;
+    }
+
+    @media (max-width: 1024px) {
+      .content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 25px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .panel h2 {
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 1.5em;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+    }
+
+    /* Connection Panel */
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .status-indicator {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #dc3545;
+      animation: pulse 2s infinite;
+    }
+
+    .status-indicator.connected {
+      background: #28a745;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-success {
+      background: #28a745;
+      color: white;
+    }
+
+    .btn-success:hover:not(:disabled) {
+      background: #218838;
+      transform: translateY(-2px);
+    }
+
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: #c82333;
+    }
+
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #5a6268;
+    }
+
+    /* Position Display */
+    .position-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .position-card {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      border: 3px solid #e0e0e0;
+      transition: all 0.3s;
+    }
+
+    .position-card:hover {
+      border-color: #667eea;
+      transform: translateY(-3px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .position-card .axis-label {
+      font-size: 1.3em;
+      font-weight: bold;
+      color: #667eea;
+      margin-bottom: 8px;
+    }
+
+    .position-card .axis-value {
+      font-size: 2em;
+      font-family: 'Courier New', monospace;
+      color: #333;
+      font-weight: bold;
+    }
+
+    .position-card .axis-unit {
+      font-size: 0.9em;
+      color: #666;
+      margin-left: 5px;
+    }
+
+    /* Jog Controls */
+    .jog-settings {
+      margin-bottom: 20px;
+    }
+
+    .jog-settings label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .jog-settings input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 1em;
+    }
+
+    .jog-settings input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .jog-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .jog-btn {
+      padding: 20px;
+      font-size: 1.2em;
+      font-weight: bold;
+      border: 3px solid #667eea;
+      background: white;
+      color: #667eea;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .jog-btn:hover:not(:disabled) {
+      background: #667eea;
+      color: white;
+      transform: scale(1.05);
+    }
+
+    .jog-btn:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    .jog-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* G-code Editor */
+    .gcode-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+
+    #gcodeTextarea {
+      width: 100%;
+      min-height: 300px;
+      padding: 15px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.95em;
+      resize: vertical;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+
+    #gcodeTextarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+    }
+
+    .file-input-wrapper input[type=file] {
+      position: absolute;
+      left: -9999px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: #e0e0e0;
+      border-radius: 15px;
+      overflow: hidden;
+      margin: 15px 0;
+      display: none;
+    }
+
+    .progress-bar.active {
+      display: block;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      width: 0%;
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+
+    /* Serial Monitor */
+    #serialOutput {
+      width: 100%;
+      min-height: 400px;
+      background: #1e1e1e;
+      color: #00ff00;
+      padding: 15px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      border: 2px solid #333;
+    }
+
+    .output-controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    /* Quick Commands */
+    .quick-commands {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .quick-cmd-btn {
+      padding: 10px 20px;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9em;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .quick-cmd-btn:hover:not(:disabled) {
+      background: #218838;
+      transform: translateY(-2px);
+    }
+
+    .quick-cmd-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Full Width Panels */
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🔧 CNC G-code Controller</h1>
+      <p>3-Axis Stepper Motor Control via USB Serial</p>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="content">
+      
+      <!-- Connection Panel -->
+      <div class="panel">
+        <h2>📡 Serial Connection</h2>
+        <div class="connection-status">
+          <div class="status-indicator" id="statusIndicator"></div>
+          <span id="statusText">Not Connected</span>
+        </div>
+        <button class="btn btn-primary" id="connectBtn">Connect to Arduino</button>
+        <div class="quick-commands">
+          <button class="quick-cmd-btn" id="statusBtn" disabled>Query Status</button>
+          <button class="quick-cmd-btn" id="homeBtn" disabled>Home (0,0,0)</button>
+          <button class="quick-cmd-btn" id="disableBtn" disabled>Disable Motors</button>
+          <button class="quick-cmd-btn" id="g90Btn" disabled>Absolute Mode</button>
+          <button class="quick-cmd-btn" id="g91Btn" disabled>Relative Mode</button>
+        </div>
+      </div>
+
+      <!-- Position Display -->
+      <div class="panel">
+        <h2>📍 Current Position</h2>
+        <div class="position-grid">
+          <div class="position-card">
+            <div class="axis-label">X-Axis</div>
+            <div class="axis-value">
+              <span id="posX">0.000</span>
+              <span class="axis-unit">mm</span>
+            </div>
+          </div>
+          <div class="position-card">
+            <div class="axis-label">Y-Axis</div>
+            <div class="axis-value">
+              <span id="posY">0.000</span>
+              <span class="axis-unit">mm</span>
+            </div>
+          </div>
+          <div class="position-card">
+            <div class="axis-label">Z-Axis</div>
+            <div class="axis-value">
+              <span id="posZ">0.000</span>
+              <span class="axis-unit">mm</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Jog Control Panel -->
+      <div class="panel">
+        <h2>🎮 Manual Jog Control</h2>
+        <div class="jog-settings">
+          <label for="jogDistance">Jog Distance (mm):</label>
+          <input type="number" id="jogDistance" value="1" min="0.1" step="0.1">
+        </div>
+        <div class="jog-settings">
+          <label for="jogSpeed">Jog Speed (mm/min):</label>
+          <input type="number" id="jogSpeed" value="600" min="100" step="100">
+        </div>
+        <div class="jog-grid">
+          <button class="jog-btn" id="jogXPlus" disabled>X+</button>
+          <button class="jog-btn" id="jogYPlus" disabled>Y+</button>
+          <button class="jog-btn" id="jogZPlus" disabled>Z+</button>
+          <button class="jog-btn" id="jogXMinus" disabled>X-</button>
+          <button class="jog-btn" id="jogYMinus" disabled>Y-</button>
+          <button class="jog-btn" id="jogZMinus" disabled>Z-</button>
+        </div>
+      </div>
+
+      <!-- G-code Editor Panel -->
+      <div class="panel">
+        <h2>📝 G-code Editor</h2>
+        <div class="gcode-controls">
+          <div class="file-input-wrapper">
+            <button class="btn btn-secondary">Load G-code File</button>
+            <input type="file" id="fileInput" accept=".gcode,.nc,.txt">
+          </div>
+          <button class="btn btn-success" id="sendGcodeBtn" disabled>Send G-code</button>
+          <button class="btn btn-danger" id="stopBtn" disabled>Emergency Stop</button>
+          <button class="btn btn-secondary" id="clearGcodeBtn">Clear</button>
+        </div>
+        <div class="progress-bar" id="progressBar">
+          <div class="progress-fill" id="progressFill">0%</div>
+        </div>
+        <textarea id="gcodeTextarea" placeholder="Paste or load G-code here...&#10;&#10;Example:&#10;G90 ; Absolute mode&#10;G0 X10 Y10 F600 ; Move to (10,10)&#10;G1 X20 Y20 ; Linear move to (20,20)&#10;G0 Z5 ; Move Z up&#10;G0 X0 Y0 Z0 ; Return to origin"></textarea>
+      </div>
+
+      <!-- Serial Monitor Panel (Full Width) -->
+      <div class="panel full-width">
+        <h2>💻 Serial Monitor</h2>
+        <pre id="serialOutput"></pre>
+        <div class="output-controls">
+          <button class="btn btn-secondary" id="clearOutputBtn">Clear Output</button>
+          <button class="btn btn-secondary" id="downloadLogBtn">Download Log</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ============ GLOBAL STATE ============
+    let port = null;
+    let reader = null;
+    let writer = null;
+    let isConnected = false;
+    let isSending = false;
+    let currentLine = 0;
+    let totalLines = 0;
+
+    // ============ DOM ELEMENTS ============
+    const connectBtn = document.getElementById('connectBtn');
+    const statusIndicator = document.getElementById('statusIndicator');
+    const statusText = document.getElementById('statusText');
+    const serialOutput = document.getElementById('serialOutput');
+    
+    const posX = document.getElementById('posX');
+    const posY = document.getElementById('posY');
+    const posZ = document.getElementById('posZ');
+    
+    const jogDistance = document.getElementById('jogDistance');
+    const jogSpeed = document.getElementById('jogSpeed');
+    const jogButtons = {
+      xPlus: document.getElementById('jogXPlus'),
+      xMinus: document.getElementById('jogXMinus'),
+      yPlus: document.getElementById('jogYPlus'),
+      yMinus: document.getElementById('jogYMinus'),
+      zPlus: document.getElementById('jogZPlus'),
+      zMinus: document.getElementById('jogZMinus')
+    };
+    
+    const gcodeTextarea = document.getElementById('gcodeTextarea');
+    const fileInput = document.getElementById('fileInput');
+    const sendGcodeBtn = document.getElementById('sendGcodeBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const clearGcodeBtn = document.getElementById('clearGcodeBtn');
+    
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    
+    const quickBtns = {
+      status: document.getElementById('statusBtn'),
+      home: document.getElementById('homeBtn'),
+      disable: document.getElementById('disableBtn'),
+      g90: document.getElementById('g90Btn'),
+      g91: document.getElementById('g91Btn')
+    };
+
+    // ============ CONNECTION ============
+    connectBtn.addEventListener('click', async () => {
+      if (isConnected) {
+        await disconnect();
+      } else {
+        await connect();
+      }
+    });
+
+    async function connect() {
+      try {
+        // Request serial port
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+
+        // Set up reader
+        const textDecoder = new TextDecoderStream();
+        port.readable.pipeTo(textDecoder.writable);
+        reader = textDecoder.readable.getReader();
+        readLoop();
+
+        // Set up writer
+        const textEncoder = new TextEncoderStream();
+        textEncoder.readable.pipeTo(port.writable);
+        writer = textEncoder.writable.getWriter();
+
+        isConnected = true;
+        updateConnectionUI(true);
+        appendOutput('=== Connected to Arduino ===\n');
+        
+        // Query initial status
+        setTimeout(() => sendCommand('STATUS'), 1000);
+
+      } catch (err) {
+        console.error('Connection error:', err);
+        appendOutput('ERROR: Failed to connect - ' + err.message + '\n');
+        alert('Failed to connect: ' + err.message);
+      }
+    }
+
+    async function disconnect() {
+      try {
+        if (reader) {
+          await reader.cancel();
+          reader.releaseLock();
+        }
+        if (writer) {
+          await writer.close();
+        }
+        if (port) {
+          await port.close();
+        }
+        
+        isConnected = false;
+        updateConnectionUI(false);
+        appendOutput('=== Disconnected ===\n');
+        
+      } catch (err) {
+        console.error('Disconnect error:', err);
+      }
+    }
+
+    function updateConnectionUI(connected) {
+      if (connected) {
+        connectBtn.textContent = 'Disconnect';
+        connectBtn.classList.remove('btn-primary');
+        connectBtn.classList.add('btn-danger');
+        statusIndicator.classList.add('connected');
+        statusText.textContent = 'Connected';
+        enableControls(true);
+      } else {
+        connectBtn.textContent = 'Connect to Arduino';
+        connectBtn.classList.remove('btn-danger');
+        connectBtn.classList.add('btn-primary');
+        statusIndicator.classList.remove('connected');
+        statusText.textContent = 'Not Connected';
+        enableControls(false);
+      }
+    }
+
+    function enableControls(enabled) {
+      Object.values(jogButtons).forEach(btn => btn.disabled = !enabled);
+      Object.values(quickBtns).forEach(btn => btn.disabled = !enabled);
+      sendGcodeBtn.disabled = !enabled;
+      stopBtn.disabled = !enabled;
+    }
+
+    // ============ SERIAL READ ============
+    async function readLoop() {
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          
+          appendOutput(value);
+          parseSerialData(value);
+        }
+      } catch (err) {
+        console.error('Read error:', err);
+        appendOutput('READ ERROR: ' + err.message + '\n');
+      }
+    }
+
+    function parseSerialData(data) {
+      // Parse position updates
+      if (data.includes('POS ')) {
+        const xMatch = data.match(/X([-\d.]+)/);
+        const yMatch = data.match(/Y([-\d.]+)/);
+        const zMatch = data.match(/Z([-\d.]+)/);
+        
+        if (xMatch) posX.textContent = parseFloat(xMatch[1]).toFixed(3);
+        if (yMatch) posY.textContent = parseFloat(yMatch[1]).toFixed(3);
+        if (zMatch) posZ.textContent = parseFloat(zMatch[1]).toFixed(3);
+      }
+    }
+
+    // ============ SERIAL WRITE ============
+    async function sendCommand(cmd) {
+      if (!isConnected) {
+        alert('Not connected to Arduino');
+        return false;
+      }
+      
+      try {
+        await writer.write(cmd + '\n');
+        return true;
+      } catch (err) {
+        console.error('Write error:', err);
+        appendOutput('WRITE ERROR: ' + err.message + '\n');
+        return false;
+      }
+    }
+
+    async function sendCommandAndWaitOK(cmd, timeout = 30000) {
+      return new Promise(async (resolve, reject) => {
+        if (!isConnected) {
+          reject(new Error('Not connected'));
+          return;
+        }
+
+        let okReceived = false;
+        let timeoutId = null;
+
+        const originalRead = reader.read.bind(reader);
+        const checkForOK = (data) => {
+          if (data.includes('OK')) {
+            okReceived = true;
+            clearTimeout(timeoutId);
+            resolve();
+          }
+        };
+
+        // Set timeout
+        timeoutId = setTimeout(() => {
+          if (!okReceived) {
+            reject(new Error('Command timeout'));
+          }
+        }, timeout);
+
+        // Send command
+        try {
+          await writer.write(cmd + '\n');
+        } catch (err) {
+          clearTimeout(timeoutId);
+          reject(err);
+        }
+
+        // Wait for OK (handled in readLoop via parseSerialData)
+        const checkInterval = setInterval(() => {
+          if (okReceived) {
+            clearInterval(checkInterval);
+          }
+        }, 100);
+      });
+    }
+
+    // ============ JOG CONTROLS ============
+    jogButtons.xPlus.addEventListener('click', () => jog('X', +1));
+    jogButtons.xMinus.addEventListener('click', () => jog('X', -1));
+    jogButtons.yPlus.addEventListener('click', () => jog('Y', +1));
+    jogButtons.yMinus.addEventListener('click', () => jog('Y', -1));
+    jogButtons.zPlus.addEventListener('click', () => jog('Z', +1));
+    jogButtons.zMinus.addEventListener('click', () => jog('Z', -1));
+
+    function jog(axis, direction) {
+      const distance = parseFloat(jogDistance.value) || 1;
+      const delta = distance * direction;
+      const cmd = `JOG ${axis}${delta >= 0 ? '+' : ''}${delta}`;
+      sendCommand(cmd);
+    }
+
+    // ============ QUICK COMMANDS ============
+    quickBtns.status.addEventListener('click', () => sendCommand('STATUS'));
+    quickBtns.home.addEventListener('click', () => sendCommand('HOME'));
+    quickBtns.disable.addEventListener('click', () => sendCommand('DISABLE'));
+    quickBtns.g90.addEventListener('click', () => sendCommand('G90'));
+    quickBtns.g91.addEventListener('click', () => sendCommand('G91'));
+
+    // ============ G-CODE HANDLING ============
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          gcodeTextarea.value = e.target.result;
+          appendOutput(`Loaded file: ${file.name}\n`);
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    clearGcodeBtn.addEventListener('click', () => {
+      gcodeTextarea.value = '';
+    });
+
+    sendGcodeBtn.addEventListener('click', async () => {
+      if (isSending) {
+        alert('Already sending G-code. Please wait or stop first.');
+        return;
+      }
+
+      const gcode = gcodeTextarea.value;
+      if (!gcode.trim()) {
+        alert('No G-code to send');
+        return;
+      }
+
+      await sendGcode(gcode);
+    });
+
+    stopBtn.addEventListener('click', () => {
+      isSending = false;
+      appendOutput('\n=== STOPPED BY USER ===\n');
+      progressBar.classList.remove('active');
+      sendCommand('DISABLE');
+    });
+
+    async function sendGcode(gcode) {
+      isSending = true;
+      sendGcodeBtn.disabled = true;
+      
+      const lines = gcode.split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith(';') && !line.startsWith('('));
+      
+      totalLines = lines.length;
+      currentLine = 0;
+      
+      progressBar.classList.add('active');
+      appendOutput(`\n=== Sending ${totalLines} lines ===\n`);
+
+      for (let i = 0; i < lines.length && isSending; i++) {
+        const line = lines[i];
+        currentLine = i + 1;
+        
+        // Update progress
+        const percent = Math.round((currentLine / totalLines) * 100);
+        progressFill.style.width = percent + '%';
+        progressFill.textContent = percent + '%';
+        
+        // Send command
+        await sendCommand(line);
+        
+        // Wait for OK response (with timeout)
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      isSending = false;
+      sendGcodeBtn.disabled = false;
+      progressBar.classList.remove('active');
+      appendOutput('=== G-code transmission complete ===\n');
+    }
+
+    // ============ SERIAL OUTPUT ============
+    function appendOutput(text) {
+      serialOutput.textContent += text;
+      serialOutput.scrollTop = serialOutput.scrollHeight;
+    }
+
+    document.getElementById('clearOutputBtn').addEventListener('click', () => {
+      serialOutput.textContent = '';
+    });
+
+    document.getElementById('downloadLogBtn').addEventListener('click', () => {
+      const text = serialOutput.textContent;
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cnc-log-' + new Date().toISOString().replace(/:/g, '-') + '.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // ============ BROWSER SUPPORT CHECK ============
+    if (!('serial' in navigator)) {
+      alert('Web Serial API not supported. Please use Chrome or Edge browser.');
+      connectBtn.disabled = true;
+      statusText.textContent = 'Browser not supported';
+    }
+  </script>
+</body>
+</html>
